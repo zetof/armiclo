@@ -7,21 +7,23 @@
 // Definition of tempo LED pin
 #define TEMPO_LED_PIN 2
 
+// Definition of LED blink time (en usecs)
+#define LED_BLINK_TIME 100000
+
 // Definition of user input delay (en usecs)
 #define USER_INPUT_DELAY 100000
 
 // Analog input definition
 const int btnsPin = A0;
-const int potarPin = A1;
+const int rotaryPin = A1;
 
 // Global LCD buttons and potentiometer values
 int btnsVal;
-int rotaryVal;
+int rotaryVal = 0;
 
-// Global tempo value
-int bpm;
-
-long now;
+// Global triggers follow up
+long lastMidiCheck = 0;
+long lastUICheck = 0;
 
 // Definition of LCD display
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
@@ -58,28 +60,37 @@ void setup() {
 
 // Looping section
 void loop() {
-  bpm = rotaryListener();
-  int blink = int(30000 / bpm);
-  digitalWrite(TEMPO_LED_PIN, HIGH);
-  delay(blink);
-  digitalWrite(TEMPO_LED_PIN, LOW);
-  delay(blink);
+  dispatcher();
+  //bpm = rotaryListener();
+  //int blink = int(30000 / bpm);
+  //digitalWrite(TEMPO_LED_PIN, HIGH);
+  //delay(blink);
+  //digitalWrite(TEMPO_LED_PIN, LOW);
+  //delay(blink);
   
 
   // btnListener(getBtnPressed());
   // Serial.write(MIDI_TIMING_CLOCK);
 }
 
-int rotaryListener(void) {
-  int rotaryVal = analogRead(potarPin);
-  if(rotaryVal < 3) rotaryVal = 0;
-  if(rotaryVal > 1020) rotaryVal = 1023;
-  int new_bpm = map(rotaryVal, 0, 1023, 56, 240);
-  if(new_bpm != bpm) {
-    lcd.setCursor(0, 1);
-    lcd.print("BPM: " + String(new_bpm) + "  ");
+void dispatcher() {
+  long now = micros();
+
+  // Is it time to read user input?
+  if(now - lastUICheck > USER_INPUT_DELAY) {
+    lastUICheck = now;
+    rotaryVal = rotaryListener();
   }
-  return new_bpm;
+}
+
+int rotaryListener(void) {
+  int newRotaryVal = analogRead(rotaryPin);
+  if(newRotaryVal != rotaryVal) {
+    int bpm = map(newRotaryVal, 0, 1020, 40, 300);
+    lcd.setCursor(0, 1);
+    lcd.print("BPM: " + String(bpm) + "  ");
+  }
+  return newRotaryVal;
 }
 
 void btnListener(byte btnStatus) { /* function btnListener */
