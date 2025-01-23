@@ -1,19 +1,32 @@
-//Libraries
+// Include libraries
 #include <LiquidCrystal.h>
 
+// Definition of MIDI messages
 #define MIDI_TIMING_CLOCK 0xF8
 
-//Parameters
-const int btnsPin  = A0;
-const int potarPin  = A1;
-int btnsVal  = 0;
-int potarVal = 0;
-int ledPin = 2;
+// Definition of tempo LED pin
+#define TEMPO_LED_PIN 2
 
-//Objects
-LiquidCrystal lcd(8, 9, 4, 5, 6, 7);;
+// Definition of user input delay (en usecs)
+#define USER_INPUT_DELAY 100000
 
-//Enums
+// Analog input definition
+const int btnsPin = A0;
+const int potarPin = A1;
+
+// Global LCD buttons and potentiometer values
+int btnsVal;
+int rotaryVal;
+
+// Global tempo value
+int bpm;
+
+long now;
+
+// Definition of LCD display
+LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
+
+// Button values enum
 enum {
   BUTTON_NONE,
   BUTTON_UP,
@@ -23,34 +36,50 @@ enum {
   BUTTON_SELECT,
 };
 
+// Setup section
 void setup() {
-  //Init Serial USB
+  
+  //Init Serial USB communication for sending MIDI messages
   Serial.begin(250000);
-  Serial.println(F("Initialize System"));
-  pinMode(ledPin, OUTPUT);
-  //Init LCD16x2 Shield
+
+  // Set tempo led digital pin to output mode
+  pinMode(TEMPO_LED_PIN, OUTPUT);
+
+  // Init LCD in 2x16 mode
   lcd.begin(16, 2);
-  lcd.print(F("Hello World "));
-  delay(2000);
+
+  // Display splash title for 2s
+  lcd.print(F("  ARDUINO MIDI  "));
+  lcd.setCursor(2, 2);
+  lcd.print(F("SIMPLE CLOCK"));
+  delay(3000);
   lcd.clear();
-  lcd.print(F("POTAR VAL: "));
 }
 
+// Looping section
 void loop() {
-  potarVal = analogRead(potarPin);
-  if(potarVal < 2) potarVal = 0;
-  if(potarVal > 1021) potarVal = 1023;
-  int bpm = map(potarVal, 0, 1023, 56, 240);
+  bpm = rotaryListener();
   int blink = int(30000 / bpm);
-  digitalWrite(ledPin, HIGH);
+  digitalWrite(TEMPO_LED_PIN, HIGH);
   delay(blink);
-  digitalWrite(ledPin, LOW);
+  digitalWrite(TEMPO_LED_PIN, LOW);
   delay(blink);
-  lcd.setCursor(0, 1);
-  lcd.print(String(bpm) + "    ");
+  
 
   // btnListener(getBtnPressed());
   // Serial.write(MIDI_TIMING_CLOCK);
+}
+
+int rotaryListener(void) {
+  int rotaryVal = analogRead(potarPin);
+  if(rotaryVal < 3) rotaryVal = 0;
+  if(rotaryVal > 1020) rotaryVal = 1023;
+  int new_bpm = map(rotaryVal, 0, 1023, 56, 240);
+  if(new_bpm != bpm) {
+    lcd.setCursor(0, 1);
+    lcd.print("BPM: " + String(new_bpm) + "  ");
+  }
+  return new_bpm;
 }
 
 void btnListener(byte btnStatus) { /* function btnListener */
