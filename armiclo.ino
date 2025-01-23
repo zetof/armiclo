@@ -3,12 +3,15 @@
 
 // Definition of MIDI messages
 #define MIDI_TIMING_CLOCK 0xF8
+#define MIDI_START 0xFA
+#define MIDI_CONTINUE 0xFB
+#define MIDI_STOP 0xFC
 
 // Definition of tempo LED pin
 #define TEMPO_LED_PIN 2
 
 // Definition of LED blink time (en usecs)
-#define LED_BLINK_TIME 100000
+#define LED_BLINK_TIME 50000
 
 // Definition of user input delay (en usecs)
 #define USER_INPUT_DELAY 100000
@@ -21,9 +24,17 @@ const int rotaryPin = A1;
 int btnsVal;
 int rotaryVal = 0;
 
-// Global triggers follow up
-long lastMidiCheck = 0;
-long lastUICheck = 0;
+// Global triggers to follow up
+long lastMidiCheck;
+long lastLEDCheck;
+long lastUICheck;
+
+// MIDI delay between each 24 ticks / beat
+long midiDelay;
+
+// LED blink config
+bool ledOnState = false;
+long ledOffDelay;
 
 // Definition of LCD display
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
@@ -42,7 +53,7 @@ enum {
 void setup() {
   
   //Init Serial USB communication for sending MIDI messages
-  Serial.begin(250000);
+  Serial.begin(31250);
 
   // Set tempo led digital pin to output mode
   pinMode(TEMPO_LED_PIN, OUTPUT);
@@ -56,6 +67,10 @@ void setup() {
   lcd.print(F("SIMPLE CLOCK"));
   delay(3000);
   lcd.clear();
+
+  // Reset all triggers before we start
+  resetTriggers();
+  Serial.write(MIDI_START);
 }
 
 // Looping section
@@ -73,13 +88,40 @@ void loop() {
   // Serial.write(MIDI_TIMING_CLOCK);
 }
 
+void resetTriggers(void) {
+  lastMidiCheck = 0;
+  lastLEDCheck = 0;
+  lastUICheck = 0;
+
+}
+
 void dispatcher() {
   long now = micros();
 
-  // Is it time to read user input?
+  // Time to send a MIDI clock signal
+  if(now - lastMidiCheck > midiDelay) {
+    lastMidiCheck = now;
+    Serial.write(MIDI_TIMING_CLOCK);
+  }
+
+  // Time to read user input
   if(now - lastUICheck > USER_INPUT_DELAY) {
     lastUICheck = now;
     rotaryVal = rotaryListener();
+  }
+
+  // Time to turn OFF LED
+  if(ledOnState && now - lastLEDCheck > LED_BLINK_TIME) {
+    lastLEDCheck = now;
+    ledOnState = false;
+    digitalWrite(TEMPO_LED_PIN, LOW);
+  }
+
+  // Time to turn ON LED
+  if(!ledOnState && now - lastLEDCheck > ledOffDelay) {
+    lastLEDCheck = now;
+    ledOnState = true;
+    digitalWrite(TEMPO_LED_PIN, HIGH);
   }
 }
 
@@ -89,6 +131,8 @@ int rotaryListener(void) {
     int bpm = map(newRotaryVal, 0, 1020, 40, 300);
     lcd.setCursor(0, 1);
     lcd.print("BPM: " + String(bpm) + "  ");
+    ledOffDelay = long(60000000 / bpm) - LED_BLINK_TIME;
+    midiDelay = long(60000000 / bpm / 24);
   }
   return newRotaryVal;
 }
