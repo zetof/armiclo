@@ -7,6 +7,14 @@
 #define MIDI_CONTINUE 0xFB
 #define MIDI_STOP 0xFC
 
+// Definition of buttons analog thresholds
+#define BUTTON_RIGHT 50
+#define BUTTON_UP 250
+#define BUTTON_DOWN 350
+#define BUTTON_LEFT 550
+#define BUTTON_SELECT 750
+#define BUTTON_NONE 1023
+
 // Definition of tempo LED pin
 #define TEMPO_LED_PIN 2
 
@@ -17,12 +25,11 @@
 #define USER_INPUT_DELAY 100000
 
 // Analog input definition
-const int btnsPin = A0;
+const int buttonPin = A0;
 const int rotaryPin = A1;
 
-// Global LCD buttons and potentiometer values
-int btnsVal;
-int rotaryVal = 0;
+// Global potentiometer value
+int rotaryVal = -1;
 
 // Global triggers to follow up
 int midiTicks;
@@ -39,15 +46,18 @@ bool ledOnState = false;
 // Definition of LCD display
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
 
-// Button values enum
+// Playing states enum
 enum {
-  BUTTON_NONE,
-  BUTTON_UP,
-  BUTTON_DOWN,
-  BUTTON_LEFT,
-  BUTTON_RIGHT,
-  BUTTON_SELECT,
+  IS_PLAYING,
+  IS_PAUSED,
+  IS_STOPPED
 };
+
+// Last button pressed
+int buttonVal;
+
+// Playing state
+byte playState = IS_STOPPED;
 
 // Setup section
 void setup() {
@@ -70,22 +80,14 @@ void setup() {
 
   // Reset all triggers before we start
   resetTriggers();
-  Serial.write(MIDI_START);
+
+  // Default state for MIDI clock is off
+  Serial.write(MIDI_STOP);
 }
 
 // Looping section
 void loop() {
   dispatcher();
-  //bpm = rotaryListener();
-  //int blink = int(30000 / bpm);
-  //digitalWrite(TEMPO_LED_PIN, HIGH);
-  //delay(blink);
-  //digitalWrite(TEMPO_LED_PIN, LOW);
-  //delay(blink);
-  
-
-  // btnListener(getBtnPressed());
-  // Serial.write(MIDI_TIMING_CLOCK);
 }
 
 void resetTriggers(void) {
@@ -102,14 +104,17 @@ void dispatcher() {
   if(now - lastUICheck > USER_INPUT_DELAY) {
     lastUICheck = now;
     rotaryVal = rotaryListener();
+    buttonListener();
   }
 
   // Time to send a MIDI clock signal
   if(now - lastMidiCheck >= midiDelay) {
     lastMidiCheck = now;
-    if(midiTicks == 0) ledOn(now);
-    midiTicks++;
-    if(midiTicks > 23) midiTicks = 0;
+    if(playState == IS_PLAYING) {
+      if(midiTicks == 0 && playState == IS_PLAYING) ledOn(now);
+      midiTicks++;
+      if(midiTicks > 23) midiTicks = 0;
+    }
     Serial.write(MIDI_TIMING_CLOCK);
   }
 
@@ -123,7 +128,7 @@ int rotaryListener(void) {
     int bpm = map(newRotaryVal, 0, 1020, 40, 300);
     lcd.setCursor(0, 1);
     lcd.print("BPM: " + String(bpm) + "  ");
-    midiDelay = long(60000000 / bpm / 24);
+    midiDelay = long(round(60000000 / bpm / 24));
   }
   return newRotaryVal;
 }
@@ -139,59 +144,35 @@ void ledOff(void) {
   digitalWrite(TEMPO_LED_PIN, LOW);
 }
 
-void btnListener(byte btnStatus) { /* function btnListener */
-  //// Get button value when pressed
-  lcd.setCursor(0, 1);
-  switch (btnStatus) {
-    case BUTTON_UP:
-      lcd.print(F("UP     "));
-      lcd.print(btnsVal);
-      break;
-
-    case BUTTON_DOWN:
-      lcd.print(F("DOWN   "));
-      lcd.print(btnsVal);
-      lcd.print("   ");
-      break;
-
-    case BUTTON_LEFT:
-      lcd.print(F("LEFT   "));
-      lcd.print(btnsVal);
-      lcd.print("   ");
-      break;
-
-    case BUTTON_RIGHT:
-      lcd.print(F("RIGHT  "));
-      lcd.print(btnsVal);
-      lcd.print("   ");
-      break;
-
-    case BUTTON_SELECT:
-      lcd.print(F("SELECT "));
-      lcd.print(btnsVal);
-      lcd.print("   ");
-      break;
-
-    default://case BUTTON_NONE:
-      //lcd.print(F("       "));
-      break;
+void buttonListener() {
+  int newButtonVal = analogRead(buttonPin);
+  if (newButtonVal < BUTTON_RIGHT) {}
+  else if (newButtonVal < BUTTON_UP) {
+    if(buttonVal != BUTTON_UP) {
+      buttonVal = BUTTON_UP;
+      if(playState == IS_PLAYING) {
+        playState = IS_PAUSED;
+        Serial.write(MIDI_STOP);
+      }
+      else if(playState == IS_PAUSED) {
+        playState = IS_PLAYING;
+        Serial.write(MIDI_CONTINUE);
+      }
+      else {
+        playState = IS_PLAYING;
+        Serial.write(MIDI_START);
+      }
+    }
   }
-  delay(100);
-}
-
-byte getBtnPressed() { /* function getBtnPressed */
-  //// Get button value when pressed
-  btnsVal = analogRead(btnsPin);
-  if (btnsVal < 50)
-    return BUTTON_RIGHT;
-  else if (btnsVal < 250)
-    return BUTTON_UP;
-  else if (btnsVal < 350)
-    return BUTTON_DOWN;
-  else if (btnsVal < 450)
-    return BUTTON_LEFT;
-  else if (btnsVal < 650)
-    return BUTTON_SELECT;
-  else
-    return BUTTON_NONE;
+  else if (newButtonVal < BUTTON_DOWN) {
+    if(buttonVal != BUTTON_DOWN) {
+      buttonVal = BUTTON_DOWN;
+      midiTicks = 0;
+      playState = IS_PLAYING;
+      Serial.write(MIDI_START);
+    }
+  }
+  else if (newButtonVal < BUTTON_LEFT) {}
+  else if (newButtonVal < BUTTON_SELECT) {}
+  else buttonVal = BUTTON_NONE;
 }
