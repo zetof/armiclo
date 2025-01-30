@@ -51,6 +51,10 @@ long lastLEDCheck;
 long lastUICheck;
 long lastBacklightCheck;
 
+
+// BPM store
+int bpm;
+
 // MIDI delay between each 24 ticks / beat
 long midiDelay;
 
@@ -232,7 +236,7 @@ int rotaryListener(long now) {
   // This value is not 100% accurate in time and can slightly drift
   if(newRotaryVal < rotaryVal - 1 || newRotaryVal > rotaryVal + 1) {
     backlightOn(now);
-    int bpm = map(newRotaryVal, 0, 1020, 40, 300);
+    bpm = map(newRotaryVal, 0, 1020, 40, 300);
     lcd.setCursor(4, 1);
     lcd.print(String(bpm) + " ");
     if(modeDirect) midiDelay = long(round(60000000 / bpm / 24));
@@ -272,7 +276,15 @@ void backlightOff(void) {
 // and only fire the event if it is different from previous one
 void buttonListener(long now) {
   int newButtonVal = analogRead(buttonPin);
-  if (newButtonVal < BUTTON_RIGHT) {}
+  if (newButtonVal < BUTTON_RIGHT) {
+    if(buttonVal != BUTTON_RIGHT) {
+      buttonVal = BUTTON_RIGHT;
+      if(!modeDirect) {
+        backlightOn(now);
+        midiDelay = long(round(60000000 / bpm / 24));
+      }
+    }
+  }
   else if (newButtonVal < BUTTON_UP) {
     if(buttonVal != BUTTON_UP) {
       backlightOn(now);
@@ -312,7 +324,10 @@ void buttonListener(long now) {
       buttonVal = BUTTON_LEFT;
       modeDirect = !modeDirect;
       lcd.setCursor(15, 1);
-      if(modeDirect) lcd.write(byte(MODE_DIRECT));
+      if(modeDirect) {
+        midiDelay = long(round(60000000 / bpm / 24));
+        lcd.write(byte(MODE_DIRECT));
+      }
       else lcd.write(byte(MODE_SEND));
     }
  }
