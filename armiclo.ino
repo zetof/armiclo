@@ -113,7 +113,10 @@ void resetTriggers(void) {
   lastBacklightCheck = micros();
 }
 
+// The dispatcher allows to check when new events have to be fired without blocking the main loop
 void dispatcher() {
+
+  // Get present time in microseconds since Arduino has been started
   long now = micros();
 
   // Time to read user input
@@ -141,9 +144,13 @@ void dispatcher() {
   if(lcdOnState && now - lastBacklightCheck > LCD_BACKLIGHT_TIME) backlightOff();
 }
 
+// Reads the rotary resistor value and adjust BPM value if it has changed
 int rotaryListener(long now) {
   int newRotaryVal = analogRead(rotaryPin);
-  if(newRotaryVal != rotaryVal) {
+
+  // We have set a small error margin of 1 when reading rotary resistor value
+  // This value is not 100% accurate in time and can slightly drift
+  if(newRotaryVal < rotaryVal - 1 || newRotaryVal > rotaryVal + 1) {
     backlightOn(now);
     int bpm = map(newRotaryVal, 0, 1020, 40, 300);
     lcd.setCursor(0, 1);
@@ -153,28 +160,36 @@ int rotaryListener(long now) {
   return newRotaryVal;
 }
 
+// Set BPM LED On
 void ledOn(long now) {
   lastLEDCheck = now;
   ledOnState = true;
   digitalWrite(TEMPO_LED_PIN, HIGH);
 }
 
+// Set BPM LED Off
 void ledOff(void) {
   ledOnState = false;
   digitalWrite(TEMPO_LED_PIN, LOW);
 }
 
+// Set LCD backlighting On
 void backlightOn(long now) {
   lastBacklightCheck = now;
   lcdOnState = true;
   digitalWrite(BACKLIGHTING_PIN, HIGH);
 }
 
+// Set LCD backlighting Off
 void backlightOff(void) {
   lcdOnState = true;
   digitalWrite(BACKLIGHTING_PIN, LOW);
 }
 
+
+// Listen to button presses from LCD buttons
+// To avoid multiple false presses, we store last pressed button
+// and only fire the event if it is different from previous one
 void buttonListener(long now) {
   int newButtonVal = analogRead(buttonPin);
   if (newButtonVal < BUTTON_RIGHT) {}
