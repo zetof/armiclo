@@ -30,6 +30,10 @@
 // Definition of user input delay (en usecs)
 #define USER_INPUT_DELAY 100000
 
+// Definition of custom char references
+#define MODE_DIRECT 0
+#define MODE_SEND 1
+
 // Analog input definition
 const int buttonPin = A0;
 const int rotaryPin = A1;
@@ -69,6 +73,29 @@ int buttonVal;
 // Playing state
 byte playState = IS_STOPPED;
 
+// Definition of custom char bitmaps
+byte mode_direct[] = {
+  B00000,
+  B00100,
+  B00110,
+  B11111,
+  B00110,
+  B00100,
+  B00000,
+  B00000
+};
+
+byte mode_send[] = {
+  B00000,
+  B01110,
+  B10001,
+  B10101,
+  B10001,
+  B01110,
+  B00000,
+  B00000
+};
+
 // Setup section
 void setup() {
   
@@ -83,6 +110,10 @@ void setup() {
 
   // Init LCD in 2x16 mode
   lcd.begin(16, 2);
+
+  // Create custom chars
+  lcd.createChar(MODE_DIRECT, mode_direct);
+  lcd.createChar(MODE_SEND, mode_send);
 
   // Display splash title for 3s
   lcd.clear();
@@ -154,7 +185,7 @@ int rotaryListener(long now) {
     backlightOn(now);
     int bpm = map(newRotaryVal, 0, 1020, 40, 300);
     lcd.setCursor(0, 1);
-    lcd.print("BPM: " + String(bpm) + "  ");
+    lcd.print("BPM: " + String(bpm) + " ");
     midiDelay = long(round(60000000 / bpm / 24));
   }
   return newRotaryVal;
@@ -220,7 +251,10 @@ void buttonListener(long now) {
       Serial.write(MIDI_START);
     }
   }
-  else if (newButtonVal < BUTTON_LEFT) {}
+  else if (newButtonVal < BUTTON_LEFT) {
+    lcd.setCursor(9, 1);
+    lcd.write(byte(MODE_DIRECT));
+ }
   else if (newButtonVal < BUTTON_SELECT) {}
   else buttonVal = BUTTON_NONE;
 }
