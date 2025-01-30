@@ -33,13 +33,16 @@
 // Definition of custom char references
 #define MODE_DIRECT 0
 #define MODE_SEND 1
+#define STATUS_PLAY 2
+#define STATUS_PAUSE 3
+#define STATUS_STOP 4
 
 // Analog input definition
 const int buttonPin = A0;
 const int rotaryPin = A1;
 
 // Global potentiometer value
-int rotaryVal = -1;
+int rotaryVal = -2;
 
 // Global triggers to follow up
 int midiTicks;
@@ -74,7 +77,7 @@ int buttonVal;
 byte playState = IS_STOPPED;
 
 // Definition of custom char bitmaps
-byte mode_direct[] = {
+byte mode_direct[8] = {
   B00000,
   B00100,
   B00110,
@@ -85,7 +88,7 @@ byte mode_direct[] = {
   B00000
 };
 
-byte mode_send[] = {
+byte mode_send[8] = {
   B00000,
   B01110,
   B10001,
@@ -95,6 +98,42 @@ byte mode_send[] = {
   B00000,
   B00000
 };
+
+byte status_play[8] = {
+  B00000,
+  B01000,
+  B01100,
+  B01110,
+  B01100,
+  B01000,
+  B00000,
+  B00000
+};
+
+byte status_pause[8] = {
+  B00000,
+  B01010,
+  B01010,
+  B01010,
+  B01010,
+  B01010,
+  B00000,
+  B00000
+};
+
+byte status_stop[8] = {
+  B00000,
+  B01110,
+  B01110,
+  B01110,
+  B01110,
+  B01110,
+  B00000,
+  B00000
+};
+
+// By default, we directly send MIDI BPM changes
+bool modeDirect = true;
 
 // Setup section
 void setup() {
@@ -114,15 +153,25 @@ void setup() {
   // Create custom chars
   lcd.createChar(MODE_DIRECT, mode_direct);
   lcd.createChar(MODE_SEND, mode_send);
+  lcd.createChar(STATUS_PLAY, status_play);
+  lcd.createChar(STATUS_PAUSE, status_pause);
+  lcd.createChar(STATUS_STOP, status_stop);
 
   // Display splash title for 3s
   lcd.clear();
   backlightOn(0);
-  lcd.print(F(" ARDUINO SIMPLE "));
-  lcd.setCursor(3, 2);
-  lcd.print(F("MIDI CLOCK"));
+  lcd.print(" ARDUINO SIMPLE ");
+  lcd.setCursor(3, 1);
+  lcd.print("MIDI CLOCK");
   delay(3000);
   lcd.clear();
+
+  // Display default interface
+  lcd.print("    STATUS:");
+  lcd.write(byte(STATUS_STOP));
+  lcd.setCursor(0, 1);
+  lcd.print("BPM:      MODE:");
+  lcd.write(byte(MODE_DIRECT));
   
   // Reset all triggers before we start
   resetTriggers();
@@ -184,9 +233,9 @@ int rotaryListener(long now) {
   if(newRotaryVal < rotaryVal - 1 || newRotaryVal > rotaryVal + 1) {
     backlightOn(now);
     int bpm = map(newRotaryVal, 0, 1020, 40, 300);
-    lcd.setCursor(0, 1);
-    lcd.print("BPM: " + String(bpm) + " ");
-    midiDelay = long(round(60000000 / bpm / 24));
+    lcd.setCursor(4, 1);
+    lcd.print(String(bpm) + " ");
+    if(modeDirect) midiDelay = long(round(60000000 / bpm / 24));
   }
   return newRotaryVal;
 }
@@ -228,16 +277,20 @@ void buttonListener(long now) {
     if(buttonVal != BUTTON_UP) {
       backlightOn(now);
       buttonVal = BUTTON_UP;
+      lcd.setCursor(11, 0);
       if(playState == IS_PLAYING) {
         playState = IS_PAUSED;
+        lcd.write(byte(STATUS_PAUSE));
         Serial.write(MIDI_STOP);
       }
       else if(playState == IS_PAUSED) {
         playState = IS_PLAYING;
+        lcd.write(byte(STATUS_PLAY));
         Serial.write(MIDI_CONTINUE);
       }
       else {
         playState = IS_PLAYING;
+        lcd.write(byte(STATUS_PLAY));
         Serial.write(MIDI_START);
       }
     }
@@ -248,12 +301,20 @@ void buttonListener(long now) {
       buttonVal = BUTTON_DOWN;
       midiTicks = 0;
       playState = IS_PLAYING;
+      lcd.setCursor(11, 0);
+      lcd.write(byte(STATUS_PLAY));
       Serial.write(MIDI_START);
     }
   }
   else if (newButtonVal < BUTTON_LEFT) {
-    lcd.setCursor(9, 1);
-    lcd.write(byte(MODE_DIRECT));
+    if(buttonVal != BUTTON_LEFT) {
+      backlightOn(now);
+      buttonVal = BUTTON_LEFT;
+      modeDirect = !modeDirect;
+      lcd.setCursor(15, 1);
+      if(modeDirect) lcd.write(byte(MODE_DIRECT));
+      else lcd.write(byte(MODE_SEND));
+    }
  }
   else if (newButtonVal < BUTTON_SELECT) {}
   else buttonVal = BUTTON_NONE;
